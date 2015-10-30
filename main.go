@@ -3,10 +3,12 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/jordanorelli/moon"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -74,10 +76,6 @@ func (r *repl) run() {
 
 		req.Header["Content-Type"] = []string{"application/x-www-form-urlencoded"}
 
-		q := req.URL.Query()
-		q.Set("pretty", "")
-		req.URL.RawQuery = q.Encode()
-
 		res, err := client.Do(req)
 		if err != nil {
 			r.errorf("error sending http request: %v", err)
@@ -114,7 +112,19 @@ func (r *repl) dumpResponse(res *http.Response) {
 		w = r.out1
 	}
 
-	io.Copy(w, res.Body)
+	b, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		r.errorf("error reading response body: %v", err)
+		return
+	}
+
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, b, "", "  "); err != nil {
+		r.errorf("error pretty-printing json: %v", err)
+		return
+	}
+
+	io.Copy(w, &buf)
 	w.Write([]byte("\n"))
 }
 
