@@ -51,16 +51,16 @@ func (r *repl) run() {
 			continue
 		}
 
-		doc, err := moon.Read(&body_in)
-		if err != nil {
-			r.errorf("moon parse error: %v", err)
-			continue
-		}
-
-		body_json, err := doc.MarshalJSON()
-		if err != nil {
-			r.errorf("moon to json encode error: %v", err)
-			continue
+		var body_json []byte
+		doc, err := moon.ReadBytes(body_in.Bytes())
+		if err == nil {
+			body_json, err = doc.MarshalJSON()
+			if err != nil {
+				r.errorf("moon to json encode error: %v", err)
+				continue
+			}
+		} else {
+			body_json = body_in.Bytes()
 		}
 
 		// compose http request
