@@ -5,10 +5,10 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"os"
-	// "github.com/jordanorelli/moon"
+	"github.com/jordanorelli/moon"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -30,7 +30,7 @@ type repl struct {
 func (r *repl) run() {
 	r.br = bufio.NewReader(r.in)
 	client := new(http.Client)
-	var body bytes.Buffer
+	var body_in bytes.Buffer
 	for {
 		// read url line
 		line, err := r.br.ReadBytes('\n')
@@ -46,19 +46,33 @@ func (r *repl) run() {
 		}
 
 		// read body
-		if err := r.readBody(&body); err != nil {
+		if err := r.readBody(&body_in); err != nil {
 			r.errorf("%v", err)
+			continue
+		}
+
+		doc, err := moon.Read(&body_in)
+		if err != nil {
+			r.errorf("moon parse error: %v", err)
+			continue
+		}
+
+		body_json, err := doc.MarshalJSON()
+		if err != nil {
+			r.errorf("moon to json encode error: %v", err)
 			continue
 		}
 
 		// compose http request
 		fqurl := fmt.Sprintf("http://%s:%d/%s", r.host, r.port, url_s)
 
-		req, err := http.NewRequest(verb, fqurl, &body)
+		req, err := http.NewRequest(verb, fqurl, bytes.NewBuffer(body_json))
 		if err != nil {
 			r.errorf("unable to create http request: %v", err)
 			continue
 		}
+
+		req.Header["Content-Type"] = []string{"application/x-www-form-urlencoded"}
 
 		q := req.URL.Query()
 		q.Set("pretty", "")
@@ -118,9 +132,9 @@ func splitUrlLine(line []byte) (string, string, error) {
 	}
 	verb_b, url_b := parts[0], parts[1]
 
-	verb := strings.ToLower(string(verb_b))
+	verb := strings.ToUpper(string(verb_b))
 	switch verb {
-	case "get", "post", "put", "delete":
+	case "GET", "POST", "PUT", "DELETE":
 	default:
 		return "", "", fmt.Errorf("illegal verb: %s", verb)
 	}
