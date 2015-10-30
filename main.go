@@ -39,12 +39,11 @@ func (r *repl) run() {
 			continue
 		}
 
-		verb, url_b, err := splitUrlLine(line)
+		verb, url_s, err := splitUrlLine(line)
 		if err != nil {
 			r.errorf("bad url line: %v", err)
 			continue
 		}
-		url := strings.TrimPrefix(string(url_b), "/")
 
 		// read body
 		if err := r.readBody(&body); err != nil {
@@ -53,12 +52,17 @@ func (r *repl) run() {
 		}
 
 		// compose http request
-		fqurl := fmt.Sprintf("http://%s:%d/%s", r.host, r.port, url)
+		fqurl := fmt.Sprintf("http://%s:%d/%s", r.host, r.port, url_s)
+
 		req, err := http.NewRequest(verb, fqurl, &body)
 		if err != nil {
 			r.errorf("unable to create http request: %v", err)
 			continue
 		}
+
+		q := req.URL.Query()
+		q.Set("pretty", "")
+		req.URL.RawQuery = q.Encode()
 
 		res, err := client.Do(req)
 		if err != nil {
@@ -107,10 +111,10 @@ func (r *repl) errorf(msg string, args ...interface{}) {
 	fmt.Fprintf(r.out2, msg, args...)
 }
 
-func splitUrlLine(line []byte) (string, []byte, error) {
+func splitUrlLine(line []byte) (string, string, error) {
 	parts := bytes.SplitN(line, []byte{' '}, 2)
 	if len(parts) != 2 {
-		return "", nil, fmt.Errorf("wrong number of url line parts. found %d, expected 2", len(parts))
+		return "", "", fmt.Errorf("wrong number of url line parts. found %d, expected 2", len(parts))
 	}
 	verb_b, url_b := parts[0], parts[1]
 
@@ -118,10 +122,13 @@ func splitUrlLine(line []byte) (string, []byte, error) {
 	switch verb {
 	case "get", "post", "put", "delete":
 	default:
-		return "", nil, fmt.Errorf("illegal verb: %s", verb)
+		return "", "", fmt.Errorf("illegal verb: %s", verb)
 	}
 
-	return verb, bytes.TrimSpace(url_b), nil
+	url_s := strings.TrimSpace(string(url_b))
+	url_s = strings.TrimPrefix(url_s, "/")
+
+	return verb, url_s, nil
 }
 
 func main() {
